@@ -1,94 +1,87 @@
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Digital-Society-Final-</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; background: #0b0f19; color: #e5e7eb; }
+    h1 { margin-bottom: 8px; }
+    #status { margin: 10px 0 18px; color: #aab1bb; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 24px; }
+    @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .card { background: #101626; border: 1px solid #1f2a44; border-radius: 16px; padding: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Results (All Responses)</h1>
+  <div id="status">Loading <code>./values.csv</code>…</div>
+
+  <div class="grid">
+    <div class="card">
+      <h2 style="margin:0 0 8px 0;">Present day</h2>
+      <div id="plot-now" style="width:100%;height:560px;"></div>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 8px 0;">Year 2075</h2>
+      <div id="plot-fut" style="width:100%;height:560px;"></div>
+    </div>
+  </div>
 
 <script>
 (async function () {
-  // --- configuración ---
-  const CSV_PATH = './values.csv'; // <-- tu CSV está en la RAÍZ
+  const CSV_PATH = './values.csv'; // your CSV is in the repo root
   const REQUIRED_COLS = ['now_a','now_b','now_c','fut_a','fut_b','fut_c'];
 
-  // Mensaje de estado en pantalla
-  const status = document.createElement('div');
-  status.style.margin = '10px 0 18px';
-  status.style.color = '#aab1bb';
-  status.textContent = 'Cargando ' + CSV_PATH + ' …';
-  document.body.insertBefore(status, document.body.children[1]);
+  const status = document.getElementById('status');
+  const ok = (m)=>{ status.style.color='#a7f3d0'; status.textContent='✅ '+m; };
+  const err= (m)=>{ status.style.color='#fca5a5'; status.textContent='⚠️ '+m; };
 
-  function showError(msg) {
-    status.style.color = '#fca5a5';
-    status.textContent = '⚠️ ' + msg;
-  }
-  function showOk(msg) {
-    status.style.color = '#a7f3d0';
-    status.textContent = '✅ ' + msg;
-  }
-
-  // Normaliza a proporciones (A+B+C=1)
   function toABC(rows, aKey, bKey, cKey) {
-    const a=[], b=[], c=[];
-    rows.forEach(r => {
-      const A = Number(r[aKey]); const B = Number(r[bKey]); const C = Number(r[cKey]);
-      if (Number.isNaN(A) || Number.isNaN(B) || Number.isNaN(C)) return;
-      const sum = (A + B + C) || 1;
-      a.push(A/sum); b.push(B/sum); c.push(C/sum);
-    });
+    const a=[],b=[],c=[];
+    for (const r of rows) {
+      const A=Number(r[aKey]), B=Number(r[bKey]), C=Number(r[cKey]);
+      if (Number.isNaN(A)||Number.isNaN(B)||Number.isNaN(C)) continue;
+      const s=(A+B+C)||1;
+      a.push(A/s); b.push(B/s); c.push(C/s);
+    }
     return {a,b,c};
   }
 
   try {
-    // 1) Descargar crudo para detectar separador
-    const raw = await fetch(CSV_PATH);
-    if (!raw.ok) return showError('No se pudo descargar ' + CSV_PATH);
-    const text = await raw.text();
+    // fetch raw to auto-detect separator
+    const resp = await fetch(CSV_PATH);
+    if (!resp.ok) return err('Cannot fetch '+CSV_PATH+' (HTTP '+resp.status+')');
+    const text = await resp.text();
 
-    // Detectar separador (coma o punto y coma)
-    const hasSemicolon = text.split('\n')[0].includes(';');
-    const parse = hasSemicolon ? d3.dsvFormat(';').parse : d3.csvParse;
-
-    // 2) Parsear
+    const head = text.split('\n')[0]||'';
+    const parse = head.includes(';') ? d3.dsvFormat(';').parse : d3.csvParse;
     const data = parse(text);
-    if (!data.length) return showError('CSV vacío.');
+    if (!data.length) return err('CSV is empty.');
     const hasAll = REQUIRED_COLS.every(k => k in data[0]);
-    if (!hasAll) return showError('Faltan columnas. Deben existir: ' + REQUIRED_COLS.join(', '));
+    if (!hasAll) return err('Missing columns. Need: '+REQUIRED_COLS.join(', '));
 
-    // 3) Preparar datos
-    const now = toABC(data, 'now_a','now_b','now_c');
-    const fut = toABC(data, 'fut_a','fut_b','fut_c');
+    const now = toABC(data,'now_a','now_b','now_c');
+    const fut = toABC(data,'fut_a','fut_b','fut_c');
 
-    // 4) Dibujar
     const labels = { a:'Individual Freedom', b:'Public Health Responsibility', c:'Technological Intervention' };
-    const layout = (title) => ({
-      paper_bgcolor:'#0b0f19', plot_bgcolor:'#0b0f19', font:{ color:'#e5e7eb' },
-      ternary:{ sum:1, aaxis:{ title:labels.a }, baxis:{ title:labels.b }, caxis:{ title:labels.c } },
-      margin:{ l:20, r:20, b:20, t:20 }, showlegend:false
-    });
+    const layout = {
+      paper_bgcolor:'#0b0f19', plot_bgcolor:'#0b0f19', font:{color:'#e5e7eb'},
+      ternary:{ sum:1, aaxis:{title:labels.a}, baxis:{title:labels.b}, caxis:{title:labels.c} },
+      margin:{l:20,r:20,b:20,t:20}, showlegend:false
+    };
 
-    const cardGrid = document.querySelector('.grid') || (() => {
-      const g = document.createElement('div'); g.className = 'grid';
-      document.body.appendChild(g); return g;
-    })();
+    await Plotly.newPlot('plot-now', [{type:'scatterternary',mode:'markers',a:now.a,b:now.b,c:now.c,marker:{size:6,opacity:0.85}}], layout);
+    await Plotly.newPlot('plot-fut', [{type:'scatterternary',mode:'markers',a:fut.a,b:fut.b,c:fut.c,marker:{size:6,opacity:0.85}}], layout);
 
-    // Crear contenedores si no existen
-    const nowDiv = document.getElementById('plot-now') || (() => {
-      const d = document.createElement('div'); d.id='plot-now'; d.style.height='560px';
-      const card = document.createElement('div'); card.className='card';
-      card.innerHTML = '<h2 style="margin:0 0 8px 0;">Present day</h2>';
-      card.appendChild(d); cardGrid.appendChild(card); return d;
-    })();
-    const futDiv = document.getElementById('plot-fut') || (() => {
-      const d = document.createElement('div'); d.id='plot-fut'; d.style.height='560px';
-      const card = document.createElement('div'); card.className='card';
-      card.innerHTML = '<h2 style="margin:0 0 8px 0;">Year 2075</h2>';
-      card.appendChild(d); cardGrid.appendChild(card); return d;
-    })();
-
-    await Plotly.newPlot(nowDiv, [{type:'scatterternary', mode:'markers', a:now.a, b:now.b, c:now.c, marker:{size:6, opacity:0.85}}], layout('Present day'));
-    await Plotly.newPlot(futDiv, [{type:'scatterternary', mode:'markers', a:fut.a, b:fut.b, c:fut.c, marker:{size:6, opacity:0.85}}], layout('Year 2075'));
-
-    showOk('CSV cargado y gráficas generadas.');
+    ok('CSV loaded and charts rendered.');
   } catch (e) {
     console.error(e);
-    showError('Error renderizando. Abre la consola (F12 → Console) para ver detalles.');
+    err('Unexpected error. Open DevTools → Console to see details.');
   }
 })();
 </script>
+</body>
+</html>
