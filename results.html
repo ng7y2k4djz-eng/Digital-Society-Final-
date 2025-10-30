@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Resultados — Valores Agregados</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Plotly (gráficas ternarias) -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <!-- d3 para leer CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; background: #0b0f19; color: #e5e7eb; }
+    h1 { margin-bottom: 6px; }
+    p  { margin-top: 0; color: #aab1bb; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 24px; }
+    @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .card { background: #101626; border: 1px solid #1f2a44; border-radius: 16px; padding: 16px; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    a.btn { background: #1f6feb; color: white; padding: 8px 12px; border-radius: 10px; text-decoration: none; }
+    .footer { margin-top: 24px; font-size: 14px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <h1>Resultados agregados</h1>
+  <p>
+    Distribución de todas las respuestas para: <b>Individual Freedom</b>, 
+    <b>Public Health Responsibility</b>, <b>Technological Intervention</b>.
+  </p>
+
+  <div class="row" style="margin: 8px 0 20px;">
+    <a class="btn" href="./data/values.csv" download>Descargar dataset (CSV)</a>
+    <a class="btn" href="./index.html">Volver al formulario</a>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2 style="margin:0 0 8px 0;">Present day</h2>
+      <div id="plot-now" style="width:100%;height:560px;"></div>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 8px 0;">Year 2075</h2>
+      <div id="plot-fut" style="width:100%;height:560px;"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Nota: si alguna fila no suma exactamente 100, se normaliza automáticamente (A+B+C=1).
+  </div>
+
+<script>
+(async function () {
+  // 1) Cargar CSV
+  const csvPath = './data/values.csv';
+  const data = await d3.csv(csvPath);
+
+  // 2) Convertir a proporciones (A+B+C=1)
+  function toABC(rows, aKey, bKey, cKey) {
+    const a = [], b = [], c = [];
+    rows.forEach(r => {
+      const A = Number(r[aKey]);
+      const B = Number(r[bKey]);
+      const C = Number(r[cKey]);
+      const sum = (A + B + C) || 1;
+      a.push(A / sum);
+      b.push(B / sum);
+      c.push(C / sum);
+    });
+    return { a, b, c };
+  }
+
+  // 3) Selección de columnas (coinciden con tu CSV)
+  const now = toABC(data, 'now_a', 'now_b', 'now_c');
+  const fut = toABC(data, 'fut_a', 'fut_b', 'fut_c');
+
+  // 4) Etiquetas de ejes
+  const labels = {
+    a: 'Individual Freedom',
+    b: 'Public Health Responsibility',
+    c: 'Technological Intervention'
+  };
+
+  // 5) Trazas
+  const traceNow = { type:'scatterternary', mode:'markers', a:now.a, b:now.b, c:now.c, marker:{ size:6, opacity:0.85 } };
+  const traceFut = { type:'scatterternary', mode:'markers', a:fut.a, b:fut.b, c:fut.c, marker:{ size:6, opacity:0.85 } };
+
+  // 6) Layout común
+  const layout = (title) => ({
+    paper_bgcolor:'#0b0f19', plot_bgcolor:'#0b0f19', font:{ color:'#e5e7eb' },
+    ternary:{
+      sum:1,
+      aaxis:{ title:labels.a, min:0 },
+      baxis:{ title:labels.b, min:0 },
+      caxis:{ title:labels.c, min:0 }
+    },
+    margin:{ l:20, r:20, b:20, t:20 }, showlegend:false
+  });
+
+  // 7) Pintar
+  Plotly.newPlot('plot-now', [traceNow], layout('Present day'), {displayModeBar:true, responsive:true});
+  Plotly.newPlot('plot-fut', [traceFut], layout('Year 2075'), {displayModeBar:true, responsive:true});
+})();
+</script>
+</body>
+</html>
